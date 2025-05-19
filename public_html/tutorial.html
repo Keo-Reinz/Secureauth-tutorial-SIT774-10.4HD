@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bcrypt Auth Tutorial</title>
+
+    <!-- ===================== Bootstrap CS ===================== -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+
+    <style>
+        pre code {
+            background-color: #2d2d2d;
+            padding: 1rem;
+            display: block;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-x: auto;
+        }
+    </style>
+
+</head>
+
+<body class="bg-dark text-light">
+
+    <!-- ===================== Navigation Bar ===================== -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-success">
+        <div class="container-fluid">
+            <a class="navbar-brand text-success" href="index.html">SecureAuthTutorial</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link text-success" href="index.html">Home</a></li>
+                    <li class="nav-item"><a class="nav-link text-success" href="tutorial.html">Tutorial</a></li>
+                    <li class="nav-item"><a class="nav-link text-success" href="demo_register.html">Register</a></li>
+                    <li class="nav-item"><a class="nav-link text-success" href="demo_login.html">Login</a></li>
+                    <li class="nav-item"><a class="nav-link text-success" href="/profile">Profile</a></li>
+                    <li class="nav-item"><a class="nav-link text-success" href="user_history.html">User History</a></li>
+                    <li class="nav-item"><a class="nav-link text-success" href="hash_demo.html">Hash Demo</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ===================== Page Header ===================== -->
+    <header class="container py-5 text-center">
+        <h1 class="text-success">Implementing Secure User Authentication</h1>
+        <p class="lead">A step-by-step tutorial using Node.js, Express, SQLite, and Bcrypt</p>
+    </header>
+
+    <!-- ===================== Tutorial Content ===================== -->
+    <main class="container mb-5">
+
+        <!-- ===================== Step 1 ===================== -->
+        <h2 class="text-success">Step 1: Project Setup</h2>
+        <p>Create a new project folder and install the required modules:</p>
+        <pre><code class="language-bash">• npm init -y
+• npm install express sqlite3 bcrypt express-session</code></pre>
+
+        <!-- ===================== Step 1.1 ===================== -->
+         <!-- Step 1.5 -->
+        <h2 class="text-success mt-4">Step 1.1: Setup Your Starter Files</h2>
+        <p>Before creating the database, let's prepare a minimal working server and landing page to help you test your routing and folder structure.</p>
+        <p>Follow the project structure of the files we will be using to show implementation</p>
+
+        <h5 class="text-success">Project Structure (in your folder directory)</h5>
+        <pre style="color: #a8f121;"><code class="language-bash">
+project-root/                   [folder]
+- index.js                      ✓
+- init_db.js                    ✓
+- secureauth.db                 #           (This will be created automatically later)
+    public_html/                [folder]
+    - index.html                ✓
+    - demo_register.html        ✓
+    - demo_login.html           ✓           (required, but won't dive into further usage of it)
+    - demo_login_success.html   ✓
+        </code></pre>
+
+        <p>I'll give you the following templates to use to start off</p>
+        <h5 class="text-success mt-3">index.js (Starter Server)</h5>
+        <pre><code class="language-javascript">
+const express = require('express');
+const path = require('path');
+const app = express();
+
+app.use(express.static(path.join(__dirname, 'public_html')));
+
+app.listen(3000, () => {
+console.log("Server running on http://localhost:3000");
+});
+        </code></pre>
+
+        <h5 class="text-success mt-3">index.html (Home Page)</h5>
+        <pre><code class="language-html">
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+    &lt;meta charset="UTF-8"&gt;
+    &lt;title&gt;SecureAuth Tutorial - Home&lt;/title&gt;
+    &lt;link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"&gt;
+&lt;/head&gt;
+&lt;body class="bg-dark text-light text-center py-5"&gt;
+    &lt;h1 class="text-success"&gt;Welcome to the Secure Auth Tutorial&lt;/h1&gt;
+    &lt;p&gt;This demo shows how to securely store login credentials using bcrypt.&lt;/p&gt;
+    &lt;a href="demo_register.html" class="btn btn-success mt-3"&gt;Register&lt;/a&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+        </code></pre>
+
+
+        <p class="mt-3">After saving these files, run:</p>
+        <pre><code class="language-bash">• node index.js</code></pre>
+
+        <p>Then open <code>http://localhost:3000</code> in your browser. You should see your homepage with a working “Register” button that links to your form.</p>
+
+        <p class="mt-3">You can then close it for now</p>
+        <pre><code class="language-bash">• CTRL+C
+• Y</code></pre>
+
+        <!-- ===================== Step 2 ===================== -->
+        <h2 class="text-success mt-4">Step 2: Create Your Database</h2>
+        <p>Use the following script to create a <code>users</code> table with a hashed password field.</p>
+        <li>This table stores only hashed versions of usernames and passwords.</li>
+        <li>Does not store the original username or password in the system.</li>
+        <p></p>
+        <pre><code class="language-javascript">
+// init_db.js
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('./secureauth.db');
+
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hashed_username TEXT,
+    hashed_password TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+});
+
+console.log("Database initialized with 'users' table.");
+        </code></pre>
+
+        <p class="mt-3">After saving the database js file, run:</p>
+        <pre><code class="language-bash">• node init_db.js</code></pre>
+        <p>This is to initialise the database so that the database is created</p>
+
+
+        <!-- ===================== Step 3 ===================== -->
+        <h2 class="text-success mt-4">Step 3: Create the Register Page</h2>
+        <p>Set up an HTML form that allows users to enter their username and password. This will be submitted to your
+            Express server.</p>
+        <pre><code class="language-html">
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;title&gt;Register&lt;/title&gt;
+  &lt;link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"&gt;
+&lt;/head&gt;
+&lt;body class="bg-dark text-light"&gt;
+  &lt;div class="container py-5"&gt;
+    &lt;h2 class="text-success text-center mb-4"&gt;Register a New Account&lt;/h2&gt;
+    &lt;form method="POST" action="/register" class="col-md-6 mx-auto bg-secondary border border-success p-4 rounded"&gt;
+      &lt;div class="mb-3"&gt;
+        &lt;label class="form-label"&gt;Username&lt;/label&gt;
+        &lt;input type="text" name="username" class="form-control" required&gt;
+      &lt;/div&gt;
+      &lt;div class="mb-3"&gt;
+        &lt;label class="form-label"&gt;Password&lt;/label&gt;
+        &lt;input type="password" name="password" class="form-control" required&gt;
+      &lt;/div&gt;
+      &lt;button type="submit" class="btn btn-success w-100"&gt;Register&lt;/button&gt;
+    &lt;/form&gt;
+
+    &lt;div class="text-center mt-4"&gt;
+      &lt;a href="index.html" class="btn btn-outline-light me-2"&gt;Back to Home&lt;/a&gt;
+      &lt;a href="demo_login.html" class="btn btn-outline-success"&gt;Go to Login&lt;/a&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+        </code></pre>
+
+
+
+        <!-- ===================== Step 4 ===================== -->
+        <h2 class="text-success mt-4">Step 4: Create the Login Page (Optional)</h2>
+        <p>The login page works similarly to the register form, but submits to <code>/login</code>.</p>
+        <pre><code class="language-html">
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;title&gt;Login&lt;/title&gt;
+  &lt;link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"&gt;
+&lt;/head&gt;
+&lt;body class="bg-dark text-light"&gt;
+  &lt;div class="container py-5"&gt;
+    &lt;h2 class="text-success text-center mb-4"&gt;Login to Your Account&lt;/h2&gt;
+    &lt;form method="POST" action="/login" class="col-md-6 mx-auto bg-secondary border border-success p-4 rounded"&gt;
+      &lt;div class="mb-3"&gt;
+        &lt;label class="form-label"&gt;Username&lt;/label&gt;
+        &lt;input type="text" name="username" class="form-control" required&gt;
+      &lt;/div&gt;
+      &lt;div class="mb-3"&gt;
+        &lt;label class="form-label"&gt;Password&lt;/label&gt;
+        &lt;input type="password" name="password" class="form-control" required&gt;
+      &lt;/div&gt;
+      &lt;button type="submit" class="btn btn-success w-100"&gt;Login&lt;/button&gt;
+    &lt;/form&gt;
+
+    &lt;div class="text-center mt-4"&gt;
+      &lt;a href="index.html" class="btn btn-outline-light me-2"&gt;Back to Home&lt;/a&gt;
+      &lt;a href="demo_register.html" class="btn btn-outline-success"&gt;Go to Register&lt;/a&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+        </code></pre>
+
+        <!-- ===================== Step 5 ===================== -->
+        <h2 class="text-success mt-4">Step 5: Create a Login Success Page (Optional)</h2>
+        <p>After a successful login, your app should redirect the user to a confirmation page. 
+        This simple page reassures the user that login worked and provides navigation options.</p>
+
+        <h5 class="text-success mt-3">demo_login_success.html</h5>
+        <pre><code class="language-html">
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;title&gt;Logged In&lt;/title&gt;
+  &lt;link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"&gt;
+&lt;/head&gt;
+&lt;body class="bg-dark text-light"&gt;
+  &lt;div class="container py-5"&gt;
+    &lt;h2 class="text-success text-center mb-4"&gt;Logged In!!!&lt;/h2&gt;
+
+    &lt;div class="text-center mt-4"&gt;
+      &lt;a href="index.html" class="btn btn-outline-light me-2"&gt;Back to Home&lt;/a&gt;
+      &lt;a href="demo_login.html" class="btn btn-outline-light me-2"&gt;Go to Login&lt;/a&gt;
+      &lt;a href="demo_register.html" class="btn btn-outline-light"&gt;Go to Register&lt;/a&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+        </code></pre>
+
+        <p>Save this file as <code>demo_login_success.html</code> inside your <code>public_html/</code> folder.
+        After a successful login, the <code>/login</code> route in your <code>index.js</code> should redirect here:</p>
+
+        <pre><code class="language-javascript">
+res.redirect('/demo_login_success.html');
+        </code></pre>
+
+        <p>This makes sure that the user is clearly informed that their login attempt was successful.</p>
+
+
+        <!-- ===================== Step 6 ===================== -->
+        <h2 class="text-success mt-4">Step 6: Setup Middleware</h2>
+        <p>In your <code>index.js</code> file, after initializing <code>app = express();</code>, add the following middleware. 
+        The first enables parsing form data, and the second enables session tracking for login state.</p>
+
+        <pre><code class="language-javascript">
+app.use(express.urlencoded({ extended: true }));
+
+app.use(session({
+  secret: 'secureauth-secret',
+  resave: false,
+  saveUninitialized: false
+}));
+        </code></pre>
+        <p>These lines makes sure that Express can process the form submissions as well as keep track of user login sessions securely.</p>
+
+        <!-- ===================== Step 7 ===================== -->
+        <h2 class="text-success mt-4">Step 7: Handle Secure Registration</h2>
+        <p>In this step, we'll add the backend logic for your registration form. It securely hashes both the username and password using <code>bcrypt</code> and stores them in the database.</p>
+        <p>Add this code into your <code>index.js</code> file <strong>before</strong> the <code>express.static(........)</code> line.</p>
+
+        <pre><code class="language-javascript">
+// POST /register route
+const bcrypt = require('bcrypt');
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('./secureauth.db');
+
+app.post('/register', (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) return res.send("Missing fields");
+
+  // Hash the username
+  bcrypt.hash(username, 10, (errU, hashedUsername) => {
+    if (errU) return res.send("Error hashing username");
+
+    // Hash the password
+    bcrypt.hash(password, 10, (errP, hashedPassword) => {
+      if (errP) return res.send("Error hashing password");
+
+      const stmt = `INSERT INTO users (hashed_username, hashed_password) VALUES (?, ?)`;
+      db.run(stmt, [hashedUsername, hashedPassword], (err) => {
+        if (err) {
+          console.error("DB insert error:", err.message);
+          return res.send("Registration failed.");
+        }
+
+        console.log(`Registered new user.`);
+        res.redirect('/demo_login.html');
+      });
+    });
+  });
+});
+        </code></pre>
+
+<p class="mt-3">
+  After restarting your server, submitting the form on <code>demo_register.html</code> will securely store the hashed credentials and redirect the user to the login page.
+</p>
+
+
+        <!-- ===================== Step 8 ===================== -->
+        <h2 class="text-success mt-4">Step 8: Handle Secure Login (Optional)</h2>
+        <p>In this step, both the username and password are hashed using bcrypt, and then compared against the database
+            values.</p>
+
+        <pre><code class="language-javascript">
+// POST /login route
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.send("Missing fields");
+
+  db.all('SELECT * FROM users', (err, users) => {
+    if (err) return res.send("Server error");
+
+    let matchedUser = null;
+
+    const bcrypt = require('bcrypt');
+    const saltRounds = 10;
+
+    const checkMatches = users.map(user => {
+      return Promise.all([
+        bcrypt.compare(username, user.hashed_username),
+        bcrypt.compare(password, user.hashed_password)
+      ]).then(([matchUser, matchPass]) => {
+        if (matchUser && matchPass) matchedUser = user;
+      });
+    });
+
+    Promise.all(checkMatches).then(() => {
+      if (!matchedUser) return res.send("Invalid username or password");
+      req.session.loggedIn = true;
+      req.session.username = matchedUser.username;
+      res.redirect('/demo_login_success.html');
+    });
+  });
+});
+        </code></pre>
+
+        <!-- ===================== Step 8.1 ===================== -->
+        <h2 class="text-success mt-4">Step 8.1: Understanding the Authentication Logic of step 8 (Optional)</h2>
+        <p>If <code>bcrypt.compare()</code> returns true for both username and password hashes, the login is then
+            authenticated. But otherwise, it will give access being denied.</p>
+        <pre style="color:rgb(32, 141, 108)"><code class="language-javascript">
+bcrypt.compare(input, storedHash, (err, result) => {
+  if (result) {
+    // Valid match
+  } else {
+    // Invalid credentials
+  }
+});
+</code></pre>
+
+
+        <p>When <code>bcrypt.compare()</code> returns <code>true</code>, we know the password is valid, and then meaning that the user is
+            securely logged in.</p>
+
+        
+        <!-- ===================== Step 9 ===================== -->
+        <h2 class="text-success mt-4">Step 9: Verifying Stored Hashed Data</h2>
+        <p>To confirm that your application is storing only hashed data (and not any raw usernames or passwords), you can inspect the database using the SQLite 
+            command-line tool. Then the following commands in order:</p>
+
+        <h5 class="text-success mt-3">1. Open the Database in Terminal</h5>
+        <pre><code class="language-bash">
+• sqlite3 secureauth.db
+        </code></pre>
+
+        <h5 class="text-success mt-3">2. View the Table Schema</h5>
+        <pre><code class="language-sql">
+• .schema users
+        </code></pre>
+
+        <h5 class="text-success mt-3">3. List Stored User Records</h5>
+        <pre><code class="language-sql">
+• SELECT * FROM users;
+        </code></pre>
+
+        <p>If everything is working correctly, you should see:</p>
+        <ul>
+        <li>One or more <code>hashed_username</code> values</li>
+        <li>Corresponding <code>hashed_password</code> values</li>
+        <li>No visible (plaintext) username or password</li>
+        </ul>
+
+        <p>This proves that the app securely encrypts credentials and doesn't store any raw sensitive information.</p>
+        <p>This approach securely checks both hashed username and password fields and avoids storing or comparing raw
+            values.</p>
+
+        <p class="mt-5">Example logic shown in the extra nav tabs: registration, login, and secure comparison logic.</p>
+    </main>
+
+    <!-- ===================== Footer ===================== -->
+    <footer class="bg-dark text-center py-4 border-top border-success mt-5">
+        <p class="mb-0">&copy; 2025 SecureAuth Tutorial. Inspired by NeonRPM.</p>
+    </footer>
+
+    <!-- ===================== Bootstrap JS ===================== -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+
+</body>
+
+</html>
